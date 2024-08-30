@@ -22,6 +22,9 @@ class MockAgent(Agent):
 
     def get_block_challenge_decision(self, action_info):
         return self.challenge_blocks
+    
+    def choose_cards(self, cards_to_choose_from):
+        return cards_to_choose_from[2:] # Always return the first two cards
 
 @pytest.fixture
 def game():
@@ -33,13 +36,13 @@ def game():
 def test_income(game):
     player = game._current_player()
     initial_coins = player.coins
-    game._step_action(Action(acting_player=player, move=Move.INCOME), blocked=False)
+    game._step_nonexchange_action(Action(acting_player=player, move=Move.INCOME), blocked=False)
     assert player.coins == initial_coins + 1
 
 def test_foreign_aid(game):
     player = game._current_player()
     initial_coins = player.coins
-    game._step_action(Action(acting_player=player, move=Move.FOREIGN_AID), blocked=False)
+    game._step_nonexchange_action(Action(acting_player=player, move=Move.FOREIGN_AID), blocked=False)
     assert player.coins == initial_coins + 2
 
 def test_coup(game):
@@ -47,14 +50,14 @@ def test_coup(game):
     player.coins = 7
     target_player = game.get_player("player2")
     initial_target_cards = len(target_player.cards)
-    game._step_action(Action(acting_player=player, move=Move.COUP, target_player=target_player), blocked=False)
+    game._step_nonexchange_action(Action(acting_player=player, move=Move.COUP, target_player=target_player), blocked=False)
     assert player.coins == 0
     assert len(target_player.cards) == initial_target_cards - 1
 
 def test_tax(game):
     player = game._current_player()
     initial_coins = player.coins
-    game._step_action(Action(acting_player=player, move=Move.TAX), blocked=False)
+    game._step_nonexchange_action(Action(acting_player=player, move=Move.TAX), blocked=False)
     assert player.coins == initial_coins + 3
 
 def test_assassinate(game):
@@ -62,7 +65,7 @@ def test_assassinate(game):
     player.coins = 3
     target_player = game.get_player("player2")
     initial_target_cards = len(target_player.cards)
-    game._step_action(Action(acting_player=player, move=Move.ASSASSINATE, target_player=target_player), blocked=False)
+    game._step_nonexchange_action(Action(acting_player=player, move=Move.ASSASSINATE, target_player=target_player), blocked=False)
     assert player.coins == 0
     assert len(target_player.cards) == initial_target_cards - 1
 
@@ -71,9 +74,31 @@ def test_steal(game):
     target_player = game.get_player("player2")
     target_player.coins = 2
     initial_player_coins = player.coins
-    game._step_action(Action(acting_player=player, move=Move.STEAL, target_player=target_player), blocked=False)
+    game._step_nonexchange_action(Action(acting_player=player, move=Move.STEAL, target_player=target_player), blocked=False)
     assert player.coins == initial_player_coins + 2
     assert target_player.coins == 0
+
+def test_exchange_one_card(game):
+    player = game._current_player()
+    player.cards = [Card.ASSASSIN]
+    initial_cards = player.cards
+    top_two_cards = game.deck[:2]
+    cards_to_choose_from = game._exchange_cards_to_choose_from(player)
+    chosen_cards = player.choose_cards(cards_to_choose_from)
+    game._complete_exchange(player, cards_to_choose_from, chosen_cards)
+    assert len(player.cards) == 1
+    assert player.cards[0] == top_two_cards[1]
+
+def test_exchange_two_cards(game):
+    player = game._current_player()
+    player.cards = [Card.ASSASSIN, Card.AMBASSADOR]
+    initial_cards = player.cards
+    top_two_cards = game.deck[:2]
+    cards_to_choose_from = game._exchange_cards_to_choose_from(player)
+    chosen_cards = player.choose_cards(cards_to_choose_from)
+    game._complete_exchange(player, cards_to_choose_from, chosen_cards)
+    assert len(player.cards) == 2
+    assert player.cards == top_two_cards
 
 def test_challenge_success(game):
     player = game._current_player()
@@ -102,7 +127,7 @@ def test_block_foreign_aid(game):
     blocking_player = game.get_player("player2")
     blocking_player.cards = [Card.DUKE]
     action = Action(acting_player=player, move=Move.FOREIGN_AID)
-    game._step_action(action, blocked=True)
+    game._step_nonexchange_action(action, blocked=True)
     assert player.coins == initial_coins  # Coins should not increase
 
 def test_block_steal(game):
@@ -113,7 +138,7 @@ def test_block_steal(game):
     initial_player_coins = player.coins
     initial_target_coins = target_player.coins
     action = Action(acting_player=player, move=Move.STEAL, target_player=target_player)
-    game._step_action(action, blocked=True)
+    game._step_nonexchange_action(action, blocked=True)
     assert player.coins == initial_player_coins
     assert target_player.coins == initial_target_coins
 
@@ -124,7 +149,7 @@ def test_block_assassinate(game):
     target_player.cards = [Card.CONTESSA]
     initial_target_cards = len(target_player.cards)
     action = Action(acting_player=player, move=Move.ASSASSINATE, target_player=target_player)
-    game._step_action(action, blocked=True)
+    game._step_nonexchange_action(action, blocked=True)
     assert player.coins == 0  # Coins should still be deducted
     assert len(target_player.cards) == initial_target_cards  # Target should not lose a card
 
@@ -243,5 +268,3 @@ def test_failed_block_challenge_steal():
     assert game.get_player("player2").coins == initial_blocking_coins
     assert len(game.get_player("player1").cards) == initial_acting_cards - 1
     assert len(game.get_player("player2").cards) == initial_blocking_cards
-
-# TODO: Implement test for exchange action

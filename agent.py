@@ -1,6 +1,6 @@
-from typing import Optional, TYPE_CHECKING
+from typing import List, Optional, TYPE_CHECKING
 
-from game_elements import ActionInfo, Move
+from game_elements import ActionInfo, Card, Move
 
 if TYPE_CHECKING:
     from game import TurnView, GameView
@@ -22,6 +22,9 @@ class Agent:
         raise NotImplementedError()
     
     def get_block_challenge_decision(self, action_info: "ActionInfo") -> bool:
+        raise NotImplementedError()
+    
+    def choose_cards(self, cards_to_choose_from: List[Card]) -> List[Card]:
         raise NotImplementedError()
     
     def observe(self, turn_view: "TurnView", game_view: "GameView"):
@@ -57,6 +60,9 @@ class IncomeAgent(Agent):
     
     def get_block_challenge_decision(self, action_info: "ActionInfo") -> bool:
         return False
+    
+    def choose_cards(self, cards_to_choose_from: List[Card]) -> List[Card]:
+        return cards_to_choose_from[:2]
     
     def observe(self, turn_view: "TurnView", game_view: "GameView"):
         super().observe(turn_view=turn_view, game_view=game_view)

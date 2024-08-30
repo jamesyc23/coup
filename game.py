@@ -49,7 +49,7 @@ class Game:
         starting_coins: int = 2,
     ):
         num_players = len(named_agents)
-        assert num_players * cards_per_player <= len(unshuffled_deck)
+        assert num_players * cards_per_player + 2 <= len(unshuffled_deck) # We ensure there's at least 2 cards remaining in the deck for ambassador exchanges
         self.deck = sample(unshuffled_deck, k=len(unshuffled_deck))
         self.players = [
             Player(
@@ -67,6 +67,34 @@ class Game:
 
     def _deal_card(self):
         return self.deck.pop(0)
+
+    def _return_player_card(self, card: Card, player: Player):
+        assert card in player.cards, "Card not in player's hand"
+        player.cards.remove(card)
+        self.deck.append(card)
+
+    def _shuffle_deck(self):
+        self.deck = sample(self.deck, k=len(self.deck))
+
+    def _replace_player_card(self, card: Card, player: Player):
+        self._return_player_card(card, player)
+        self._shuffle_deck()
+        new_card = self._deal_card()
+        player.cards.append(new_card)
+        return new_card
+    
+    def _exchange_cards_to_choose_from(self, player: Player):
+        return player.cards + [self._deal_card(), self._deal_card()]
+    
+    def _complete_exchange(self, player: Player, cards_to_choose_from: List[Card], chosen_cards: List[Card]):
+        player.cards = chosen_cards
+        
+        cards_to_return = cards_to_choose_from.copy()
+        for card in chosen_cards:
+            cards_to_return.remove(card)
+        
+        for card in cards_to_return:
+            self.deck.append(card)
 
     def _current_player(self):
         return self.players[self.acting_player_index]
@@ -103,10 +131,12 @@ class Game:
 
         return Action(acting_player=acting_player, move=move, target_player=target_player)
     
-    def _step_action(self, action: Action, blocked: bool):
+    def _step_nonexchange_action(self, action: Action, blocked: bool):
         acting_player = action.acting_player
         move = action.move
         target_player = action.target_player
+
+        assert move != Move.EXCHANGE, "Cannot use _step_nonexchange_action for exchange"
 
         if move == Move.INCOME:
             assert not blocked, "Cannot block income"
@@ -133,20 +163,18 @@ class Game:
             if not blocked:
                 acting_player.coins += min(target_player.coins, 2)
                 target_player.coins -= min(target_player.coins, 2)
-        elif move == Move.EXCHANGE:
-            assert not blocked, "Cannot block exchange"
-            # TODO: implement
-            pass
         else:
             raise ValueError("Invalid action")
 
     def step_challenge(self, action: Action, challenging_player: Player) -> Tuple[bool, Card]:
-        challenge_success = not any(action.move.enabled_by(card) for card in action.acting_player.cards)
+        acting_player = action.acting_player
+        challenge_success = not any(action.move.enabled_by(card) for card in acting_player.cards)
         if challenge_success:
-            card_lost = self._lose_influence(action.acting_player)
+            card_lost = self._lose_influence(acting_player)
         else:
             card_lost = self._lose_influence(challenging_player)
-            # TODO: give the acting player a new card
+            card_revealed = next(card for card in acting_player.cards if action.move.enabled_by(card))
+            new_card = self._replace_player_card(card_revealed, acting_player)
 
         return challenge_success, card_lost
 
@@ -156,7 +184,8 @@ class Game:
             card_lost = self._lose_influence(blocking_player)
         else:
             card_lost = self._lose_influence(action.acting_player)
-            # TODO: give the blocking player a new card
+            card_revealed = next(card for card in blocking_player.cards if action.move.blockable_by(card))
+            new_card = self._replace_player_card(card_revealed, blocking_player)
 
         return challenge_success, card_lost
 
@@ -191,7 +220,12 @@ class Game:
                     blocked = True
 
         if will_take_action:
-            self._step_action(action, blocked=blocked)
+            if action.move == Move.EXCHANGE:
+                cards_to_choose_from = self._exchange_cards_to_choose_from(current_player)
+                chosen_cards = current_player.choose_cards(cards_to_choose_from)
+                self._complete_exchange(current_player, cards_to_choose_from, chosen_cards)
+            else:
+                self._step_nonexchange_action(action, blocked=blocked)
 
         for player_index, player in enumerate(self.players):
             turn_view = TurnView(

@@ -79,6 +79,9 @@ class Player:
     def get_block_challenge_decision(self, action_info: "ActionInfo") -> bool:
         return self.agent.get_block_challenge_decision(action_info)
     
+    def choose_cards(self, cards_to_choose_from: List[Card]) -> List[Card]:
+        return self.agent.choose_cards(cards_to_choose_from)
+    
     def observe(self, turn_view: "TurnView", game_view: "GameView"):
         self.agent.observe(turn_view, game_view)
     
