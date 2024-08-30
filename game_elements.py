@@ -58,8 +58,9 @@ class ActionInfo:
     target_player_index: Optional[int] = None
 
 class Player:
-    def __init__(self, agent: "Agent", cards: List[Card], starting_coins: int = 2):
+    def __init__(self, agent: "Agent", name: str, cards: List[Card], starting_coins: int = 2):
         self.agent = agent
+        self.name = name
         self.cards = cards
         self.coins = starting_coins
 

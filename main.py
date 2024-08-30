@@ -1,12 +1,16 @@
 from game import Game
-from agent import Agent
+from agent import Agent, IncomeAgent
 
 def main():
     game = Game(
-        agents=[Agent(), Agent()],
-        starting_coins=2
+        named_agents={
+            "player1": IncomeAgent(),
+            "player2": IncomeAgent(),
+        },
+        cards_per_player=1,
     )
-    print(game)
+    winner = game.play(verbose=True)
+    print(winner.agent)
 
 if __name__ == "__main__":
     main()
